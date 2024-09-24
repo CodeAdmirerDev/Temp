@@ -1,0 +1,237 @@
+Project Overview
+Problem: Customers have extensive historical data in on-premise databases, affecting operational efficiency during imports/exports.
+Objective: Separate active, recent data from legacy data and store them efficiently in Azure, allowing access to both while minimizing resource usage.
+Technologies:
+
+ASP.NET Core Microservices for customer data management.
+Azure SQL for storing active data.
+Azure Blob Storage for managing legacy data.
+Azure Functions (optional) for data migration automation.
+Step-by-Step Implementation
+Step 1: Create ASP.NET Core Microservices
+1.1 Project Setup
+In Visual Studio, create a new ASP.NET Core Web API project:
+
+Project Template: ASP.NET Core Web API
+Framework: .NET 6 or later.
+Define a Customer model to represent customer data.
+
+Create a Models folder and add Customer.cs:
+csharp
+Copy code
+public class Customer
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public string Email { get; set; }
+    public DateTime LastModified { get; set; }
+    public bool IsActive { get; set; } // Indicator if data is recent or legacy
+}
+1.2 Create a Data Access Layer
+Create a service to interact with Azure SQL for active data.
+
+Create a Service Layer:
+
+In the Services folder, add CustomerDataService.cs:
+csharp
+Copy code
+using Microsoft.Data.SqlClient;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using YourNamespace.Models;
+
+public class CustomerDataService
+{
+    private readonly string _connectionString;
+
+    public CustomerDataService(string connectionString)
+    {
+        _connectionString = connectionString;
+    }
+
+    public async Task<List<Customer>> GetActiveCustomersAsync()
+    {
+        var customers = new List<Customer>();
+
+        using (SqlConnection connection = new SqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            var command = new SqlCommand("SELECT * FROM Customers WHERE IsActive = 1", connection);
+
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    customers.Add(new Customer
+                    {
+                        Id = (int)reader["Id"],
+                        Name = reader["Name"].ToString(),
+                        Email = reader["Email"].ToString(),
+                        LastModified = (DateTime)reader["LastModified"],
+                        IsActive = (bool)reader["IsActive"]
+                    });
+                }
+            }
+        }
+        return customers;
+    }
+
+    // Other data access methods like AddCustomer, GetLegacyCustomers...
+}
+Configure Azure SQL:
+
+In appsettings.json, add your Azure SQL connection string:
+json
+Copy code
+{
+  "ConnectionStrings": {
+    "AzureSqlConnection": "Server=tcp:your-server.database.windows.net,1433;Initial Catalog=your-db;Persist Security Info=False;User ID=your-user;Password=your-password;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+  }
+}
+Dependency Injection: In Startup.cs, register the service:
+
+csharp
+Copy code
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddControllers();
+    services.AddSingleton<CustomerDataService>();
+}
+1.3 Create a Blob Storage Service for Legacy Data
+Since legacy data will be handled separately in Azure Blob Storage, we need a service for uploading and retrieving legacy data.
+
+Install Azure Blob Storage SDK: Run the following command to install the necessary NuGet package:
+
+bash
+Copy code
+dotnet add package Azure.Storage.Blobs
+Implement Blob Service: In the Services folder, add BlobService.cs:
+
+csharp
+Copy code
+using Azure.Storage.Blobs;
+using System.IO;
+using System.Threading.Tasks;
+
+public class BlobService
+{
+    private readonly BlobServiceClient _blobServiceClient;
+
+    public BlobService(string connectionString)
+    {
+        _blobServiceClient = new BlobServiceClient(connectionString);
+    }
+
+    public async Task UploadLegacyDataAsync(string blobName, string data)
+    {
+        var containerClient = _blobServiceClient.GetBlobContainerClient("legacy-data");
+        var blobClient = containerClient.GetBlobClient(blobName);
+
+        using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(data)))
+        {
+            await blobClient.UploadAsync(stream, overwrite: true);
+        }
+    }
+
+    public async Task<string> GetLegacyDataAsync(string blobName)
+    {
+        var containerClient = _blobServiceClient.GetBlobContainerClient("legacy-data");
+        var blobClient = containerClient.GetBlobClient(blobName);
+
+        var response = await blobClient.DownloadAsync();
+        using (var reader = new StreamReader(response.Value.Content))
+        {
+            return await reader.ReadToEndAsync();
+        }
+    }
+}
+Configure Blob Storage: Add your Blob Storage connection string to appsettings.json:
+
+json
+Copy code
+{
+  "BlobStorageConnection": "DefaultEndpointsProtocol=https;AccountName=your-account;AccountKey=your-key;EndpointSuffix=core.windows.net"
+}
+Register Blob Service in Startup.cs:
+
+csharp
+Copy code
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddControllers();
+    services.AddSingleton<CustomerDataService>();
+    services.AddSingleton<BlobService>();
+}
+1.4 Create a Controller for Customer Data
+The controller will handle API requests, route them to the appropriate service, and return responses.
+
+Create CustomerController.cs in the Controllers folder:
+csharp
+Copy code
+using Microsoft.AspNetCore.Mvc;
+using YourNamespace.Services;
+using System.Threading.Tasks;
+
+[ApiController]
+[Route("api/[controller]")]
+public class CustomerController : ControllerBase
+{
+    private readonly CustomerDataService _customerDataService;
+    private readonly BlobService _blobService;
+
+    public CustomerController(CustomerDataService customerDataService, BlobService blobService)
+    {
+        _customerDataService = customerDataService;
+        _blobService = blobService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetActiveCustomers()
+    {
+        var customers = await _customerDataService.GetActiveCustomersAsync();
+        return Ok(customers);
+    }
+
+    [HttpPost("migrate-legacy")]
+    public async Task<IActionResult> MigrateLegacyData()
+    {
+        var legacyCustomers = await _customerDataService.GetLegacyCustomersAsync();
+        foreach (var customer in legacyCustomers)
+        {
+            // Migrate legacy customer data to Blob Storage
+            await _blobService.UploadLegacyDataAsync($"customer-{customer.Id}.json", Newtonsoft.Json.JsonConvert.SerializeObject(customer));
+        }
+        return Ok("Legacy data migrated.");
+    }
+}
+Step 2: Set Up Azure Cloud Resources
+2.1 Azure SQL Setup
+Create Azure SQL Database in the Azure portal.
+Configure Firewall rules to allow access from your development machine.
+Create a Customer Table:
+sql
+Copy code
+CREATE TABLE Customers (
+    Id INT PRIMARY KEY IDENTITY,
+    Name NVARCHAR(100),
+    Email NVARCHAR(100),
+    LastModified DATETIME,
+    IsActive BIT
+);
+2.2 Azure Blob Storage Setup
+Create a Storage Account in the Azure portal.
+Create a Blob Container called legacy-data for storing the legacy data files.
+Step 3: Testing the Application Locally
+Use Postman to hit the APIs:
+
+GET /api/customer to get active customer data.
+POST /api/customer/migrate-legacy to migrate legacy data to Azure Blob.
+The application will interact with both Azure SQL for active data and Azure Blob Storage for legacy data.
+
+Step 4: Deploy the Application to Azure
+Publish the Application to Azure App Service directly from Visual Studio:
+
+Right-click the project in Solution Explorer → Publish → Azure App Service.
+Configure App Settings in Azure to store connection strings:
+
+Add Azure SQL and Blob Storage connection strings under the Configuration section in Azure App Service.
