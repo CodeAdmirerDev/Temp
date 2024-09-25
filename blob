@@ -1,0 +1,126 @@
+using System;
+using System.Data.SqlClient;
+using System.Threading.Tasks;
+using Azure.Storage.Blobs;
+using Newtonsoft.Json;
+using Microsoft.Extensions.Configuration;
+
+public class LegacyDataService
+{
+    private readonly string _sqlConnectionString;
+    private readonly string _blobConnectionString;
+    private readonly string _blobContainerName;
+
+    public LegacyDataService(IConfiguration configuration)
+    {
+        _sqlConnectionString = configuration.GetConnectionString("AzureSqlConnection");
+        _blobConnectionString = configuration.GetConnectionString("AzureBlobConnection");
+        _blobContainerName = configuration["BlobContainerName"];
+    }
+
+    public async Task TransferAndDeleteLegacyData()
+    {
+        try
+        {
+            // Step 1: Query legacy data from SQL database
+            var legacyData = await GetLegacyDataFromSql();
+
+            if (legacyData != null && legacyData.Count > 0)
+            {
+                // Step 2: Serialize legacy data to JSON format
+                string jsonData = JsonConvert.SerializeObject(legacyData);
+
+                // Step 3: Upload serialized data to Azure Blob Storage
+                bool isUploadSuccess = await UploadToBlobAsync(jsonData);
+
+                // Step 4: Delete the data from SQL database if upload is successful
+                if (isUploadSuccess)
+                {
+                    await DeleteLegacyDataFromSql();
+                    Console.WriteLine("Legacy data successfully deleted from the database.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+
+    private async Task<List<object>> GetLegacyDataFromSql()
+    {
+        var query = "SELECT * FROM YourTable WHERE YourTimestampColumn < DATEADD(year, -5, GETDATE())";  // Example for selecting data older than 5 years
+        using (SqlConnection conn = new SqlConnection(_sqlConnectionString))
+        {
+            await conn.OpenAsync();
+
+            using (SqlCommand cmd = new SqlCommand(query, conn))
+            {
+                SqlDataReader reader = await cmd.ExecuteReaderAsync();
+
+                var dataList = new List<object>();
+                while (await reader.ReadAsync())
+                {
+                    // Extract data from each row
+                    dataList.Add(new
+                    {
+                        Id = reader["Id"],
+                        Data = reader["Data"],
+                        Timestamp = reader["Timestamp"]
+                    });
+                }
+                return dataList;
+            }
+        }
+    }
+
+    private async Task<bool> UploadToBlobAsync(string jsonData)
+    {
+        try
+        {
+            // Create the BlobServiceClient object
+            BlobServiceClient blobServiceClient = new BlobServiceClient(_blobConnectionString);
+
+            // Get the container client
+            BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(_blobContainerName);
+
+            // Create the container if it doesn't exist
+            await containerClient.CreateIfNotExistsAsync();
+
+            // Create a blob with a unique name (e.g., using a timestamp or GUID)
+            string blobName = $"legacydata_{Guid.NewGuid()}.json";
+            BlobClient blobClient = containerClient.GetBlobClient(blobName);
+
+            // Upload the serialized JSON data
+            using (var stream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(jsonData)))
+            {
+                await blobClient.UploadAsync(stream);
+            }
+
+            Console.WriteLine($"Data uploaded to blob {blobName} successfully.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Blob upload failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task DeleteLegacyDataFromSql()
+    {
+        // This query deletes data older than 5 years from the database.
+        var deleteQuery = "DELETE FROM YourTable WHERE YourTimestampColumn < DATEADD(year, -5, GETDATE())";
+
+        using (SqlConnection conn = new SqlConnection(_sqlConnectionString))
+        {
+            await conn.OpenAsync();
+
+            using (SqlCommand cmd = new SqlCommand(deleteQuery, conn))
+            {
+                int rowsAffected = await cmd.ExecuteNonQueryAsync();
+                Console.WriteLine($"{rowsAffected} rows deleted from the database.");
+            }
+        }
+    }
+}
