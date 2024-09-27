@@ -1,0 +1,9 @@
+# Login to your Azure account (if not already done)  
+az login  
+
+# Define your resource group and Azure Firewall name  
+RESOURCE_GROUP="YOUR_RESOURCE_GROUP_NAME"  # Replace with your resource group name  
+FIREWALL_NAME="YOUR_FIREWALL_NAME"          # Replace with your Azure Firewall name  
+
+# Get the Azure Firewall configuration and save it to a JSON file  
+az network firewall show --resource-group $RESOURCE_GROUP --name $FIREWALL_NAME > AzureFirewallConfig.json
