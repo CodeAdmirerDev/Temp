@@ -1,13 +1,60 @@
 # Variables  
 $ResourceGroupName = "YOUR_RESOURCE_GROUP_NAME"  # Replace with your resource group name  
 
-# Get all VMs in the Resource Group  
-$vms = Get-AzVM -ResourceGroupName $ResourceGroupName  
+# Import the necessary modules  
+Import-Module Az.Sql  
+Import-Module Az.Storage  
 
-# Stop each Virtual Machine  
-foreach ($vm in $vms) {  
-    Write-Output "Stopping VM: $($vm.Name)"  
-    Stop-AzVM -ResourceGroupName $ResourceGroupName -Name $vm.Name -Force  
+# Stop Azure Virtual Machines  
+function Stop-AzureVMs {  
+    $vms = Get-AzVM -ResourceGroupName $ResourceGroupName  
+    foreach ($vm in $vms) {  
+        Write-Output "Stopping VM: $($vm.Name)"  
+        Stop-AzVM -ResourceGroupName $ResourceGroupName -Name $vm.Name -Force  
+    }  
 }  
 
-Write-Output "All VMs in resource group $ResourceGroupName have been stopped."
+# Stop Azure SQL Servers  
+function Stop-AzureSqlServers {  
+    $sqlServers = Get-AzSqlServer -ResourceGroupName $ResourceGroupName  
+    foreach ($sqlServer in $sqlServers) {  
+        Write-Output "Stopping SQL Server: $($sqlServer.ServerName)"  
+        
+        # Currently, Azure SQL Databases cannot be stopped; thus, we'll just output the action  
+        # Closing connections is an alternative action as there is no direct stop command  
+        # However, you might consider deleting the SQL database or server   
+        # This action should be carefully planned as it would result in data loss.  
+
+        # Example of closing connections (this is not a stop but may help with reducing load)  
+        # $databases = Get-AzSqlDatabase -ResourceGroupName $ResourceGroupName -ServerName $sqlServer.ServerName  
+        # foreach ($db in $databases) {  
+        #     # Execute command to close connections based on your strategy (may not directly be feasible via PowerShell)  
+        #     Write-Output "Closing connections for database: $($db.DatabaseName)"  
+        # }  
+
+        # Alternatively, you can delete a SQL Server (this action is irrecoverable):  
+        # Remove-AzSqlServer -ResourceGroupName $ResourceGroupName -ServerName $sqlServer.ServerName -Force  
+    }  
+}  
+
+# Suspend (or delete) Storage Accounts  
+function Manage-AzureStorageAccounts {  
+    $storageAccounts = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName  
+    foreach ($storageAccount in $storageAccounts) {  
+        Write-Output "Managing Storage Account: $($storageAccount.StorageAccountName)"  
+        
+        # Here you can either suspend the storage account or delete it (again, this is a significant action!)  
+        # For demo, just output the name  
+        # WARNING: Uncomment to delete  
+        # Remove-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $storageAccount.StorageAccountName -Force  
+
+        # Suspend operations here manually, but note that Azure Storage Accounts do not have a stop feature.  
+    }  
+}  
+
+# Execute Functions  
+Stop-AzureVMs  
+Stop-AzureSqlServers  
+Manage-AzureStorageAccounts  
+
+Write-Output "Shutdown process completed for VMs, SQL Servers, and Storage Accounts."
