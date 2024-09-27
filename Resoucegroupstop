@@ -1,0 +1,13 @@
+# Variables  
+$ResourceGroupName = "YOUR_RESOURCE_GROUP_NAME"  # Replace with your resource group name  
+
+# Get all VMs in the Resource Group  
+$vms = Get-AzVM -ResourceGroupName $ResourceGroupName  
+
+# Stop each Virtual Machine  
+foreach ($vm in $vms) {  
+    Write-Output "Stopping VM: $($vm.Name)"  
+    Stop-AzVM -ResourceGroupName $ResourceGroupName -Name $vm.Name -Force  
+}  
+
+Write-Output "All VMs in resource group $ResourceGroupName have been stopped."
