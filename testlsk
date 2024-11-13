@@ -1,5 +1,39 @@
 Certainly! Below is a guide to create a User ID and password validator API using ASP.NET Web API with ADO.NET instead of Entity Framework. We'll go through creating an API that can validate user credentials against a SQL Server database using ADO.NET.
 
+
+using Microsoft.AspNetCore.Builder;  
+using Microsoft.Extensions.DependencyInjection;  
+using Microsoft.Extensions.Hosting;  
+using UserValidationAPI.Data;  
+using UserValidationAPI.Models;  
+
+var builder = WebApplication.CreateBuilder(args);  
+
+// Configure services  
+builder.Services.AddSingleton<UserRepository>(sp =>  
+{  
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");  
+    return new UserRepository(connectionString);  
+});  
+builder.Services.AddControllers();  
+
+var app = builder.Build();  
+
+// Configure middleware  
+if (app.Environment.IsDevelopment())  
+{  
+    app.UseDeveloperExceptionPage();  
+}  
+
+app.UseHttpsRedirection();  
+
+app.UseAuthorization();  
+
+app.MapControllers();  
+
+app.Run();
+
+
 ### Step 1: Set Up the ASP.NET Web API Project
 
 1. **Create a New Project:**
