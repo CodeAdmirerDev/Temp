@@ -1,0 +1,82 @@
+If you're using a customized form instead of a gallery control in Power Apps and want to manage the display of elements based on selected checkboxes in a first screen, here's how to achieve that:
+
+Steps to Implement a Customized Form
+Create Checkboxes on the First Screen:
+
+Add checkboxes for the options you're interested in (e.g., "Vendor Details", "Contact Person").
+Make sure to set a variable or collection to store the selected checkboxes. For example:
+plaintext
+// In the OnCheck property of each checkbox  
+If(  
+    CheckboxVendor.Value,   
+    Collect(SelectedOptions, "VendorDetails"),   
+    Remove(SelectedOptions, "VendorDetails")  
+);  
+
+If(  
+    CheckboxContact.Value,   
+    Collect(SelectedOptions, "ContactPerson"),   
+    Remove(SelectedOptions, "ContactPerson")  
+);  
+Navigating to the Second Screen:
+
+Use a button to navigate to the second screen, passing the collected items:
+plaintext
+Navigate(SecondScreen, { CollectedItems: SelectedOptions });  
+Set Up the Customized Form on the Second Screen:
+
+Place all the relevant fields in the second screen where your users will input the details.
+You’ll have to conditionally hide the fields based on the selections made on the first screen.
+Conditional Visibility of Fields:
+
+For each field or section (e.g., Vendor Details, Contact Person), set the Visible property to check if that option is included in the CollectedItems collection.
+For example:
+
+plaintext
+// For Vendor Details section  
+If(CountIf(CollectedItems, Value = "VendorDetails") > 0, true, false)  
+
+// For Contact Person section  
+If(CountIf(CollectedItems, Value = "ContactPerson") > 0, true, false)  
+Reduce Space When Fields are Hidden:
+
+To manage spacing effectively:
+Group related fields into containers or use vertical containers.
+Adjust the Height property of the container to dynamically respond based on its visibility.
+You can also set the Visible property of the container itself, ensuring it does not take up space when hidden.
+Example using containers:
+
+plaintext
+// Inside a Container named VendorDetailsContainer  
+If(CountIf(CollectedItems, Value = "VendorDetails") > 0, true, false)  
+Test and Adjust:
+
+Once you implement the above logic, test the form by selecting different checkboxes and navigating to the second screen to ensure that only the relevant fields appear and that there’s no excessive spacing when fields are hidden.
+Example Implementation in PowerApps
+First Screen Setup:
+
+Use checkboxes for each of the selections.
+Collect the selected items into a global variable.
+Second Screen Setup:
+
+Add a container for each section (e.g., Vendor Details, Contact Person).
+Set visibility based on the selected checkboxes.
+Example Conditional Visibility Expression
+Assuming you have some fields for "Vendor Details" like:
+
+Vendor Name
+Address
+PO Email
+Set the Visible properties of the respective controls:
+
+plaintext
+// For Vendor Name  
+If(CountIf(CollectedItems, Value = "VendorDetails") > 0, true, false)  
+
+// For Address  
+If(CountIf(CollectedItems, Value = "VendorDetails") > 0, true, false)  
+
+// For PO Email  
+If(CountIf(CollectedItems, Value = "VendorDetails") > 0, true, false)  
+Conclusion
+By using checkboxes to direct which fields should be visible in a customized form, and implementing the visibility and spacing logic effectively, you can create an efficient and user-friendly experience in Power Apps. If you need further help or specific examples, just let me know!
